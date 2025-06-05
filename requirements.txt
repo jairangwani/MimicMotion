@@ -1,0 +1,29 @@
+# Core PyTorch stack (CUDA 11.7 version; works on GPU or CPU)
+torch==2.0.1+cu117
+torchvision==0.15.2+cu117
+--extra-index-url https://download.pytorch.org/whl/cu117
+
+# Compatible versions to avoid import errors and ensure stability
+diffusers==0.27.0
+huggingface_hub==0.20.2
+accelerate==0.23.0
+
+# Pose detection & processing
+onnxruntime-gpu==1.22.0
+opencv-python==4.11.0.86
+decord==0.6.0
+
+# Utilities and helpers
+einops==0.8.1
+omegaconf==2.3.0
+matplotlib==3.10.3
+transformers==4.32.1
+
+# Required by various deps
+numpy==1.26.4
+psutil==7.0.0
+tqdm==4.67.1
+requests==2.32.3
+PyYAML==6.0.2
+packaging==25.0
+typing-extensions==4.14.0
