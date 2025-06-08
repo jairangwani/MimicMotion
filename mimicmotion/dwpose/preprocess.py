@@ -9,13 +9,16 @@ from .dwpose_detector import dwpose_detector as dwprocessor
 def get_video_pose(
         video_path: str, 
         ref_image: np.ndarray, 
-        sample_stride: int=1):
+        sample_stride: int=1,
+        num_frames: int=None): # MODIFIED: Added num_frames parameter
     """preprocess ref image pose and video pose
 
     Args:
         video_path (str): video pose path
         ref_image (np.ndarray): reference image 
         sample_stride (int, optional): Defaults to 1.
+        num_frames (int, optional): The number of frames to extract. 
+                                    If None, processes the entire video. Defaults to None.
 
     Returns:
         np.ndarray: sequence of video pose
@@ -33,13 +36,27 @@ def get_video_pose(
     vr = decord.VideoReader(video_path, ctx=decord.cpu(0))
     sample_stride *= max(1, int(vr.get_avg_fps() / 24))
 
-    frames = vr.get_batch(list(range(0, len(vr), sample_stride))).asnumpy()
+    # MODIFIED: The following block limits the number of frames to be processed
+    # 1. Generate indices for all frames based on the sample_stride
+    all_indices = list(range(0, len(vr), sample_stride))
+    
+    # 2. If num_frames is specified, truncate the list of indices
+    if num_frames is not None:
+        all_indices = all_indices[:num_frames]
+    
+    # 3. Load only the selected frames from the video
+    frames = vr.get_batch(all_indices).asnumpy()
+    # END OF MODIFICATION
+
     detected_poses = [dwprocessor(frm) for frm in tqdm(frames, desc="DWPose")]
     dwprocessor.release_memory()
+    
+    # The rest of the function remains unchanged. 
+    # It will now correctly operate on the limited number of frames.
 
     detected_bodies = np.stack(
         [p['bodies']['candidate'] for p in detected_poses if p['bodies']['candidate'].shape[0] == 18])[:,
-                      ref_keypoint_id]
+                                        ref_keypoint_id]
     # compute linear-rescale params
     ay, by = np.polyfit(detected_bodies[:, :, 1].flatten(), np.tile(ref_body[:, 1], len(detected_bodies)), 1)
     fh, fw, _ = vr[0].shape
