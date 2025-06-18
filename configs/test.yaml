@@ -5,9 +5,9 @@ base_model_path: stabilityai/stable-video-diffusion-img2vid-xt-1-1
 ckpt_path: models/MimicMotion_1-1.pth
 
 test_case:
-  - ref_video_path: assets/example_data/videos/pose1.mp4
-    ref_image_path: assets/example_data/images/demo1.jpg
-    num_frames: 72
+  - ref_video_path: assets/example_data/videos/idle_anm.mp4
+    ref_image_path: assets/example_data/images/Agent_2_wide.png
+    num_frames: 77
     resolution: 576
     frames_overlap: 6
     num_inference_steps: 25
@@ -15,6 +15,6 @@ test_case:
     guidance_scale: 2.0
     sample_stride: 2
     fps: 15
-    seed: 42
+    seed: 0
 
 
