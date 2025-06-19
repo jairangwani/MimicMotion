@@ -6,7 +6,7 @@ ckpt_path: models/MimicMotion_1-1.pth
 
 test_case:
   - ref_video_path: assets/example_data/videos/idle_anm.mp4
-    ref_image_path: assets/example_data/images/Agent_3_wide.png
+    ref_image_path: G:\My Drive\LIVA\Bucket\Temp\Agent_2_Wide_576.png
     num_frames: 20
     resolution: 576
     frames_overlap: 6
