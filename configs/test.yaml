@@ -5,7 +5,7 @@ base_model_path: stabilityai/stable-video-diffusion-img2vid-xt-1-1
 ckpt_path: models/MimicMotion_1-1.pth
 
 test_case:
-  - ref_video_path: assets/example_data/videos/idle_anm.mp4
+  - ref_video_path: G:\My Drive\LIVA\Bucket\Temp\kling_talking_1_576.mp4
     ref_image_path: G:\My Drive\LIVA\Bucket\Temp\Agent_2_Wide_576.png
     num_frames: 20
     resolution: 576
@@ -17,5 +17,5 @@ test_case:
     fps: 15
     seed: 0
     # New parameters for DWPose loading
-    use_dw_from_path: True 
+    use_dw_from_path: False 
     dw_data_path: C:\Code\MimicMotion\MyBlendedAnimation
