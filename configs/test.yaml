@@ -6,8 +6,8 @@ ckpt_path: models/MimicMotion_1-1.pth
 
 test_case:
   - ref_video_path: assets/example_data/videos/idle_anm.mp4
-    ref_image_path: assets/example_data/images/Agent_2_wide.png
-    num_frames: 77
+    ref_image_path: assets/example_data/images/Agent_3_wide.png
+    num_frames: 20
     resolution: 576
     frames_overlap: 6
     num_inference_steps: 25
@@ -16,5 +16,6 @@ test_case:
     sample_stride: 2
     fps: 15
     seed: 0
-
-
+    # New parameters for DWPose loading
+    use_dw_from_path: True 
+    dw_data_path: C:\Code\MimicMotion\MyBlendedAnimation

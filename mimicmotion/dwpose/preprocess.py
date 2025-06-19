@@ -1,5 +1,10 @@
+# mimicmotion/dwpose/preprocess.py
 import os
 import json
+import re
+from pathlib import Path
+from typing import List, Union, Optional
+
 from tqdm import tqdm
 import decord
 import numpy as np
@@ -9,7 +14,7 @@ from .dwpose_detector import dwpose_detector as dwprocessor
 
 
 class NpEncoder(json.JSONEncoder):
-    """Helper to convert numpy types to native Python for JSON serialization."""
+    """Convert NumPy scalars/arrays to plain Python for JSON dumping."""
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
@@ -18,103 +23,148 @@ class NpEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
+# ---------------------------------------------------------------------------
+# Helper that converts every *nested* list inside a cached pose back to np.ndarray
+# ---------------------------------------------------------------------------
+def _lists_to_numpy(tree):
+    if isinstance(tree, list):
+        # recurse
+        return np.asarray([_lists_to_numpy(item) for item in tree], dtype=np.float32)
+    return tree
+
+
+# ---------------------------------------------------------------------------
+# Main helpers
+# ---------------------------------------------------------------------------
 def get_video_pose(
-        video_path: str,
-        ref_image: np.ndarray,
-        sample_stride: int = 1,
-        num_frames: int = None
-    ) -> np.ndarray:
+    video_path: str,
+    ref_image: np.ndarray,
+    sample_stride: int = 1,
+    num_frames: Optional[int] = None,
+    use_dw_from_path: bool = False,
+    dw_data_path: Optional[Union[str, Path]] = None,
+) -> np.ndarray:
     """
-    Preprocess reference image pose and extract pose + save JSON for each frame.
+    Either run the DWPose detector (and save JSON) **or**
+    read pre-computed JSON files and return the same pose-image tensor.
 
-    Args:
-        video_path (str): path to the input video
-        ref_image (np.ndarray): reference image for pose rescale
-        sample_stride (int): frame sampling stride
-        num_frames (int): limit on number of frames (None => all)
-
-    Returns:
-        np.ndarray: sequence of pose-drawn frames (H x W x 3)
+    Returns
+    -------
+    np.ndarray : shape (T, H, W, 3) with dtype uint8
     """
-    # --- derive directory for JSON output ---
-    base = os.path.splitext(os.path.basename(video_path))[0]
-    json_dir = os.path.join(os.path.dirname(video_path), f"{base}_pose_json")
-    os.makedirs(json_dir, exist_ok=True)
+    # 1) Decide where JSON lives
+    base           = Path(video_path).stem
+    default_json   = Path(video_path).with_name(f"{base}_pose_json")
+    json_dir       = Path(dw_data_path) if dw_data_path else default_json
 
-    # Reference keypoints
-    ref_pose = dwprocessor(ref_image)
-    ref_keypoint_id = [0, 1, 2, 5, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
-    if len(ref_pose['bodies']['subset']) > 0:
-        ref_keypoint_id = [i for i in ref_keypoint_id
-                           if ref_pose['bodies']['subset'][0][i] >= 0.0]
-    ref_body = ref_pose['bodies']['candidate'][ref_keypoint_id]
+    # ------------------------------------------------------------------
+    # 2) ===== RE-USE cached pose ===================================================
+    # ------------------------------------------------------------------
+    if use_dw_from_path:
+        if not json_dir.exists():
+            raise FileNotFoundError(
+                f"--use_dw_from_path was set but no JSON folder found at '{json_dir}'."
+            )
 
-    height, width, _ = ref_image.shape
+        # Accept 'frame_000123.json' etc.  Robust to gaps/missing frames.
+        json_files: List[Path] = sorted(
+            f for f in json_dir.iterdir() if re.fullmatch(r"frame_\d{6}\.json", f.name)
+        )
+        if not json_files:
+            raise RuntimeError(f"No frame_*.json files found in '{json_dir}'.")
+        if num_frames is not None:
+            json_files = json_files[:num_frames]
 
-    # Video reading & frame sampling
+        h, w, _ = ref_image.shape
+        pose_imgs = []
+        for jf in json_files:
+            with open(jf, "r") as f:
+                cached_pose = json.load(f)
+
+            # ---- convert every list back to NumPy (draw_pose needs that) ----
+            cached_pose["bodies"]["candidate"] = np.asarray(
+                cached_pose["bodies"]["candidate"], dtype=np.float32
+            )
+            cached_pose["bodies"]["subset"]    = np.asarray(
+                cached_pose["bodies"]["subset"],    dtype=np.float32
+            )
+            cached_pose["bodies"]["score"]     = np.asarray(
+                cached_pose["bodies"]["score"],     dtype=np.float32
+            )
+
+            # hands / faces blocks are lists-of-lists; keep that structure
+            for key in ("hands", "hands_score", "faces", "faces_score"):
+                if key in cached_pose and cached_pose[key]:
+                    cached_pose[key] = [
+                        np.asarray(item, dtype=np.float32) for item in cached_pose[key]
+                    ]
+
+            pose_imgs.append(np.array(draw_pose(cached_pose, h, w)))
+
+        return np.stack(pose_imgs)   # (T, H, W, 3), dtype=uint8
+
+    # ------------------------------------------------------------------
+    # 3) ===== NEW detection & save JSON ==========================================
+    # ------------------------------------------------------------------
+    json_dir.mkdir(parents=True, exist_ok=True)
+
+    # Reference keypoints for linear rescale
+    ref_pose        = dwprocessor(ref_image)
+    ref_kpt_idx     = [0, 1, 2, 5, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+    if len(ref_pose["bodies"]["subset"]):
+        ref_kpt_idx = [i for i in ref_kpt_idx if ref_pose["bodies"]["subset"][0][i] >= 0]
+    ref_body        = ref_pose["bodies"]["candidate"][ref_kpt_idx]
+
+    h, w, _ = ref_image.shape
+
+    # ---------------- Video reading & frame sampling -------------------
     vr = decord.VideoReader(video_path, ctx=decord.cpu(0))
     sample_stride *= max(1, int(vr.get_avg_fps() / 24))
-    all_indices = list(range(0, len(vr), sample_stride))
+    frame_idx      = list(range(0, len(vr), sample_stride))
     if num_frames is not None:
-        all_indices = all_indices[:num_frames]
-    frames = vr.get_batch(all_indices).asnumpy()
+        frame_idx = frame_idx[:num_frames]
+    frames         = vr.get_batch(frame_idx).asnumpy()      # (T, H, W, 3)
 
-    # Pose detection
-    detected_poses = [dwprocessor(frm) for frm in tqdm(frames, desc="DWPose")]
+    # ---------------- DWPose inference ---------------------------------
+    detected = [dwprocessor(f) for f in tqdm(frames, desc="DWPose")]
     dwprocessor.release_memory()
 
-    # Stack bodies for rescale
-    detected_bodies = np.stack([
-        p['bodies']['candidate'] for p in detected_poses
-        if p['bodies']['candidate'].shape[0] == 18
-    ])[:, ref_keypoint_id]
+    # Linear rescale so that body size matches ref image
+    det_bodies = np.stack([
+        p["bodies"]["candidate"] for p in detected
+        if p["bodies"]["candidate"].shape[0] == 18
+    ])[:, ref_kpt_idx]
 
-    # Linear rescale parameters
-    ay, by = np.polyfit(
-        detected_bodies[:, :, 1].flatten(),
-        np.tile(ref_body[:, 1], len(detected_bodies)), 1
-    )
+    ay, by = np.polyfit(det_bodies[:, :, 1].ravel(),
+                        np.tile(ref_body[:, 1], len(det_bodies)), 1)
     fh, fw, _ = vr[0].shape
-    ax = ay / (fh / fw / height * width)
+    ax = ay / (fh / fw / h * w)
     bx = np.mean(
-        np.tile(ref_body[:, 0], len(detected_bodies))
-        - detected_bodies[:, :, 0].flatten() * ax
+        np.tile(ref_body[:, 0], len(det_bodies)) -
+        det_bodies[:, :, 0].ravel() * ax
     )
     a = np.array([ax, ay])
     b = np.array([bx, by])
 
-    output_pose = []
-    # Process each detected pose: rescale, save JSON, draw
-    for idx, detected_pose in enumerate(detected_poses):
-        # Rescale all parts
-        detected_pose['bodies']['candidate'] = detected_pose['bodies']['candidate'] * a + b
-        detected_pose['faces'] = detected_pose['faces'] * a + b
-        detected_pose['hands'] = detected_pose['hands'] * a + b
+    # ---------------- Save JSON & make pose images ---------------------
+    pose_imgs = []
+    for idx, det_pose in enumerate(detected):
+        det_pose["bodies"]["candidate"] = det_pose["bodies"]["candidate"] * a + b
+        det_pose["faces"]  = det_pose["faces"]  * a + b
+        det_pose["hands"]  = det_pose["hands"]  * a + b
 
-        # --- Save pose data as JSON ---
-        json_path = os.path.join(json_dir, f"frame_{idx:06d}.json")
-        with open(json_path, 'w') as jf:
-            # dump full pose dict (numpy -> lists)
-            json.dump(detected_pose, jf, indent=4, cls= NpEncoder)
+        # dump as JSON (lists!)
+        jf = json_dir / f"frame_{idx:06d}.json"
+        with open(jf, "w") as f:
+            json.dump(det_pose, f, indent=4, cls=NpEncoder)
 
-        # Draw and store pose image
-        im = draw_pose(detected_pose, height, width)
-        output_pose.append(np.array(im))
+        pose_imgs.append(np.array(draw_pose(det_pose, h, w)))
 
-    return np.stack(output_pose)
+    return np.stack(pose_imgs)   # (T, H, W, 3), dtype=uint8
 
 
 def get_image_pose(ref_image: np.ndarray) -> np.ndarray:
-    """
-    Process single image pose.
-
-    Args:
-        ref_image (np.ndarray): reference image pixel data
-
-    Returns:
-        np.ndarray: pose visualization (RGB)
-    """
-    height, width, _ = ref_image.shape
-    ref_pose = dwprocessor(ref_image)
-    pose_img = draw_pose(ref_pose, height, width)
-    return np.array(pose_img)
+    """Pose image for the *reference* still frame."""
+    h, w, _ = ref_image.shape
+    pose = dwprocessor(ref_image)
+    return np.array(draw_pose(pose, h, w))
