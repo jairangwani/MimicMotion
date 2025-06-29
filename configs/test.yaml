@@ -3,67 +3,55 @@
 # ===================================================================
 
 # --- Base Model & Checkpoint Paths ---
-# Path to the base Stable Video Diffusion model
 base_model_path: stabilityai/stable-video-diffusion-img2vid-xt-1-1
-
-# Path to the downloaded MimicMotion model checkpoint
 ckpt_path: models/MimicMotion_1-1.pth
 
 # ===================================================================
 #                        Animation Task
 # ===================================================================
-# This single block works for both scenarios.
-# All paths have been updated with your provided file locations.
-# -------------------------------------------------------------------
 test_case:
   -
     # ===============================================================
-    #                 THE ONLY LINE YOU NEED TO CHANGE
+    #                 THE ONLY TWO LINES YOU NEED TO CHANGE
     # ---------------------------------------------------------------
-    # Set to 'false' to generate motion from the video file below.
-    # Set to 'true' to load motion from the 'dw_data_path' directory.
-    #
-    use_dw_from_path: false
+    # Set to 'false' to generate motion from the video, creating new pose files.
+    # Set to 'true' to load motion from the cached pose files.
+    use_cached_pose: false
+
+    save_pose_images: true            # turn on/off frame dumps
+    pose_images_dir: "C:/MimicMotion/PoseCache/pose_previews"  # relative to output_dir
+    
+    # Path to the video file that provides the motion.
+    # This is used for BOTH generating poses and for naming the cache folder.
+    motion_video_path: "G:/My Drive/LIVA/Bucket/Temp/Talking_1280_768.mp4"
     # ===============================================================
 
 
     # --- Common Parameters (Always Used) ---
-    
+
     # Path to the image of the character you want to animate.
-    character_image_path: "G:/My Drive/LIVA/Bucket/Temp/Agent_2_Wide_1280_768.png"
+    #character_image_path: "G:/My Drive/LIVA/Bucket/Temp/Agent_2/Agent_2_base_img_old_1280_768.png"
+    character_image_path: "G:/My Drive/LIVA/Bucket/Temp/Agent_4/Agent_4_base_img_1280_768.png"
+
+    # Directory where the final pose data (JSONs) will be saved to or loaded from.
+    # A subfolder named after the motion video will be created here.
+    dw_pose_dir: "C:/MimicMotion/PoseCache"
     
     # The resolution of the output video.
     resolution: 576
     
     # Total number of frames to generate for the final video.
-    num_frames: 50
-    
+    num_frames: 60
+  
     # How many frames to skip in the motion video. 2 means process every 2nd frame.
     sample_stride: 2
 
     # Animation and generation settings.
-    fps: 15
-    seed: 42
+    fps: 16
+    seed: 100
     num_inference_steps: 25
     guidance_scale: 2.0
     noise_aug_strength: 0
     
     # Settings for handling long videos (tiling).
     frames_overlap: 6
-
-
-    # --- Paths for SCENARIO 1 (When use_dw_from_path is false) ---
-
-    # Path to the video file that provides the motion.
-    motion_video_path: "G:/My Drive/LIVA/Bucket/Temp/kling_idle_1.mp4"
-
-    # Directory where new DWPose JSON files will be SAVED.
-    # The script creates a subfolder here.
-    dw_pose_dir: "C:/MimicMotion/GeneratedPoseCache"
-
-
-    # --- Path for SCENARIO 2 (When use_dw_from_path is true) ---
-
-    # Directory from which pre-computed DWPose JSON files will be LOADED.
-    # This directory must already contain 'frame_000000.json', etc.
-    dw_data_path: "C:/MimicMotion/PrecomputedMotions/dance_poses"
