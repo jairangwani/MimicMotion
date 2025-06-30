@@ -27,11 +27,12 @@ test_case:
     # ===============================================================
 
 
-    # --- Common Parameters (Always Used) ---
+    # --- Common Parameters (Always Used) ---talking_2-talking_3
 
     # Path to the image of the character you want to animate.
     #character_image_path: "G:/My Drive/LIVA/Bucket/Temp/Agent_2/Agent_2_base_img_old_1280_768.png"
-    character_image_path: "G:/My Drive/LIVA/Bucket/Temp/Agent_4/Agent_4_base_img_1280_768.png"
+    #character_image_path: "G:/My Drive/LIVA/Bucket/Temp/Agent_4/Agent_4_base_img_1280_768.png"
+    character_image_path: "G:/My Drive/LIVA/Bucket/Temp/Agent_3/Agent_3_base_img_1280_768.png"
 
     # Directory where the final pose data (JSONs) will be saved to or loaded from.
     # A subfolder named after the motion video will be created here.
@@ -41,7 +42,7 @@ test_case:
     resolution: 576
     
     # Total number of frames to generate for the final video.
-    num_frames: 60
+    num_frames: 40
   
     # How many frames to skip in the motion video. 2 means process every 2nd frame.
     sample_stride: 2
