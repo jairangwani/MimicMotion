@@ -42,13 +42,13 @@ test_case:
     resolution: 576
     
     # Total number of frames to generate for the final video.
-    num_frames: 40
+    num_frames: 120
   
     # How many frames to skip in the motion video. 2 means process every 2nd frame.
-    sample_stride: 2
+    sample_stride: 1
 
     # Animation and generation settings.
-    fps: 16
+    fps: 24
     seed: 100
     num_inference_steps: 25
     guidance_scale: 2.0
